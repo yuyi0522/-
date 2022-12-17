@@ -7,6 +7,7 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.model_selection import GridSearchCV
 from xgboost import XGBRegressor
+from scipy.stats import spearmanr
 
 train_data = pd.read_csv("./novozymes-enzyme-stability-prediction/train.csv", index_col='seq_id')
 train_data_update = pd.read_csv("./novozymes-enzyme-stability-prediction/train_updates_20220929.csv",
@@ -41,7 +42,11 @@ for letter in amino_acids:
     train_data[letter] = train_data['protein_sequence'].str.count(letter)
     test_data[letter] = test_data['protein_sequence'].str.count(letter)
 
+# train_data['protein_len'] = train_data['protein_sequence'].apply(lambda x: len(x))
+# test_data['protein_len'] = test_data['protein_sequence'].apply(lambda x: len(x))
+
 train_data.drop(['protein_sequence', 'data_source'], axis=1, inplace=True)
+test_data.drop(['protein_sequence', 'data_source'], axis=1, inplace=True)
 sns.heatmap(train_data.astype('float').corr(), annot=True)
 # plt.show()
 
@@ -88,3 +93,12 @@ print('MSE train: %.3f, test: %.3f' % (
 print('R^2 train: %.3f, test: %.3f' % (
     r2_score(y_train, y_train_pred),
     r2_score(y_test, y_test_pred)))
+
+print('spearmanr train:', spearmanr(y_train, y_train_pred))
+print('spearmanr test:', spearmanr(y_test, y_test_pred))
+
+submission = pd.read_csv('./novozymes-enzyme-stability-prediction/sample_submission.csv')
+submission['tm'] = xgb.predict(test_data)
+submission['tm'] = submission['tm'].astype('int64')
+submission.to_csv('submission.csv', index=False)
+
