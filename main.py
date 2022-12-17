@@ -2,28 +2,25 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import  train_test_split
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.model_selection import GridSearchCV
-from xgboost import XGBRegressor
-from scipy.stats import spearmanr
+from sklearn.metrics import mean_squared_error, r2_score
+from xgboost.sklearn import XGBRegressor
 
-train_data = pd.read_csv("./novozymes-enzyme-stability-prediction/train.csv", index_col='seq_id')
-train_data_update = pd.read_csv("./novozymes-enzyme-stability-prediction/train_updates_20220929.csv",
-                                index_col='seq_id')
-test_data = pd.read_csv("./novozymes-enzyme-stability-prediction/test.csv", index_col='seq_id')
+train_data = pd.read_csv("dataset/novozymes-enzyme-stability-prediction/train.csv", index_col='seq_id')
+train_data_update = pd.read_csv("dataset/novozymes-enzyme-stability-prediction/train_updates_20220929.csv", index_col='seq_id')
+test_data = pd.read_csv("dataset/novozymes-enzyme-stability-prediction/test.csv", index_col='seq_id')
 
 all_nan = train_data_update.isna().all(axis='columns')
 
 drop_index = train_data_update[all_nan].index
 train_data.drop(index=drop_index, inplace=True)
 
-update_index = train_data_update[~all_nan].index  # ~ means not
-train_data.loc[update_index, ['protein_sequence', 'pH', 'tm']] = train_data_update.loc[
-    update_index, ['protein_sequence', 'pH', 'tm']]
+update_index = train_data_update[~all_nan].index    # ~ means not
+train_data.loc[update_index, ['protein_sequence', 'pH', 'tm']] = train_data_update.loc[update_index, ['protein_sequence', 'pH', 'tm']]
 
-# print(train_data.isnull().any())
+print(train_data.isnull().any())
 train_data['pH'] = train_data['pH'].fillna(7.0)
 
 # amino_acids = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T',
@@ -37,16 +34,12 @@ train_data['pH'] = train_data['pH'].fillna(7.0)
 #     letter_count_is_zero[letter] = train_data[letter].isin([0]).all()
 # print(letter_count_is_zero)
 
-amino_acids = ['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y']
+amino_acids= ['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y']
 for letter in amino_acids:
     train_data[letter] = train_data['protein_sequence'].str.count(letter)
     test_data[letter] = test_data['protein_sequence'].str.count(letter)
 
-# train_data['protein_len'] = train_data['protein_sequence'].apply(lambda x: len(x))
-# test_data['protein_len'] = test_data['protein_sequence'].apply(lambda x: len(x))
-
 train_data.drop(['protein_sequence', 'data_source'], axis=1, inplace=True)
-test_data.drop(['protein_sequence', 'data_source'], axis=1, inplace=True)
 sns.heatmap(train_data.astype('float').corr(), annot=True)
 # plt.show()
 
@@ -55,50 +48,29 @@ X = train_data.drop(['tm'], axis=1)
 y = train_data['tm']
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=7)
 
-# cv_params = {'gamma': [i for i in np.arange(0.5, 1.5, 0.1)]}     # 針對gamma做超參數調整
-# other_params = {'learning_rate': 0.1,
-#                 'n_estimators': 300,
-#                 'max_depth': 5,
-#                 'min_child_weight': 4,
-#                 'objective': 'reg:squarederror',
-#                 'gamma': 1.3,
-#                 'reg_lambda': 1,
-#                 'random_state': 7,
-#                 'gpu_id': 0,
-#                 'tree_method': 'gpu_hist'}
-#
-# xgb = XGBRegressor(**other_params)
-# optimized_xgb = GridSearchCV(estimator=xgb, param_grid=cv_params, scoring='r2', cv=10, n_jobs=-1)
-# optimized_xgb.fit(X_train, y_train)
-#
-# print("參數最佳值:{}".format(optimized_xgb.best_params_))
-# print("最佳模型得分:{}".format(optimized_xgb.best_score_))
+xgbr = XGBRegressor(n_estimators=800,learning_rate=0.1
+                    ,max_depth = 5,min_child_weight = 1
+                    ,subsample = 0.8, colsample_bytree = 0.8
+                    ,gamma = 0,reg_alpha = 0,reg_lambda = 1
+                    ,tree_method= 'gpu_hist',base_score=0.5
+                    ,max_cat_threshold=64,max_cat_to_onehot=4)
 
-xgb = XGBRegressor(learning_rate=0.1,
-                   n_estimators=300,
-                   max_depth=5,
-                   min_child_weight=4,
-                   objective='reg:squarederror',
-                   reg_lambda=1,
-                   random_state=7,
-                   gpu_id=0,
-                   tree_method='gpu_hist')
-xgb.fit(X_train, y_train)
-y_train_pred = xgb.predict(X_train)
-y_test_pred = xgb.predict(X_test)
+xgbr.fit(X_train, y_train)
+y_train_pred = xgbr.predict(X_train)
+y_test_pred = xgbr.predict(X_test)
 print('MSE train: %.3f, test: %.3f' % (
     mean_squared_error(y_train, y_train_pred),
     mean_squared_error(y_test, y_test_pred)))
 
-print('R^2 train: %.3f, test: %.3f' % (
+print('R^2 train: %.5f, test: %.5f' % (
     r2_score(y_train, y_train_pred),
     r2_score(y_test, y_test_pred)))
 
-print('spearmanr train:', spearmanr(y_train, y_train_pred))
-print('spearmanr test:', spearmanr(y_test, y_test_pred))
+"""
+parameters_to_search = {'learning_rate': np.linspace(0.1,1,10),'n_estimators': range(500,2000,100)}
+xgbr_cv = GridSearchCV(xgbr,parameters_to_search,cv=5,scoring = 'r2',n_jobs = -1)
+xgbr_cv.fit(X_train,y_train)
 
-submission = pd.read_csv('./novozymes-enzyme-stability-prediction/sample_submission.csv')
-submission['tm'] = xgb.predict(test_data)
-submission['tm'] = submission['tm'].astype('int64')
-submission.to_csv('submission.csv', index=False)
-
+best_estimator = xgbr_cv.best_estimator_
+print(best_estimator)
+"""
